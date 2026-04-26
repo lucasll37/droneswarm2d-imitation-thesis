@@ -927,7 +927,7 @@ def bootstrap_pairwise_heatmap(
     title="",
     subtitle="",
     figsize=None,
-    fmt_pvalue=".5f",
+    fmt_pvalue=".4f",
     annot_fontsize=9,
     save_fig=False,
     save_dir="./plots",
@@ -952,7 +952,7 @@ def bootstrap_pairwise_heatmap(
     import os
     import re
     from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-    from statsmodels.stats.multitest import multipletests  # ← NOVO
+    from statsmodels.stats.multitest import multipletests
 
     # ------------------------------------------------------------------ #
     #  1. Filtrar dados                                                    #
@@ -1040,7 +1040,6 @@ def bootstrap_pairwise_heatmap(
                 f"Recebido: '{correction}'"
             )
 
-        # Pares com p-valor válido (não-NaN)
         valid_pairs  = [(gi, gj) for (gi, gj), res in results.items()
                         if not np.isnan(res["p_value"])]
         p_vals_raw   = [results[(gi, gj)]["p_value"] for (gi, gj) in valid_pairs]
@@ -1094,8 +1093,8 @@ def bootstrap_pairwise_heatmap(
     def fmt_p(p):
         if np.isnan(p):
             return "N/A"
-        if p < 0.0001:
-            return "< 0.0001"
+        if p <= 0.001:
+            return "< 0.001"
         return f"{p:{fmt_pvalue}}"
 
     # ------------------------------------------------------------------ #
@@ -1123,7 +1122,6 @@ def bootstrap_pairwise_heatmap(
                         fontsize=annot_fontsize, color="#888888")
 
             elif j < i:
-                # Triângulo inferior — usa p-valor corrigido
                 p = p_matrix[i, j]
 
                 if np.isnan(p):
@@ -1139,7 +1137,6 @@ def bootstrap_pairwise_heatmap(
                 )
                 ax.add_patch(rect)
 
-                # Contraste do texto
                 if not isinstance(color, str):
                     lum = 0.299 * color[0] + 0.587 * color[1] + 0.114 * color[2]
                 else:
@@ -1151,7 +1148,6 @@ def bootstrap_pairwise_heatmap(
                         fontsize=annot_fontsize, color=txt_color, fontweight="bold")
 
             else:
-                # Triângulo superior — fundo neutro
                 rect = plt.Rectangle(
                     (x, y), 1, 1,
                     facecolor="#f5f5f5", edgecolor="white", linewidth=2
@@ -1189,9 +1185,9 @@ def bootstrap_pairwise_heatmap(
     cbar_red.ax.invert_yaxis()
 
     tick_red = [0, alpha * 0.25, alpha * 0.5, alpha * 0.75, alpha]
-    cbar_red.set_ticks(tick_red)
+    cbar_red.ax.yaxis.set_major_locator(plt.FixedLocator(tick_red))  # ← fixa antes do set_ticklabels
     cbar_red.set_ticklabels(
-        ["< 0.0001" if v == 0 else f"{v:.4f}" for v in tick_red],
+        ["≈ 0" if v == 0 else f"{v:.4f}" for v in tick_red],
         fontsize=8
     )
 
@@ -1214,7 +1210,7 @@ def bootstrap_pairwise_heatmap(
         alpha + (1 - alpha) * 0.75,
         1.0,
     ]
-    cbar_grn.set_ticks(tick_grn)
+    cbar_grn.ax.yaxis.set_major_locator(plt.FixedLocator(tick_grn))  # ← consistência
     cbar_grn.set_ticklabels([f"{v:.2f}" for v in tick_grn], fontsize=8)
 
     # ------------------------------------------------------------------ #
@@ -1277,8 +1273,8 @@ def bootstrap_pairwise_heatmap(
         def _fmt(p):
             if np.isnan(p):
                 return "       N/A"
-            if p < 0.0001:
-                return "  < 0.0001"
+            if p <= 0.001:
+                return "  < 0.001"
             return f"{p:>12.6f}"
 
         sig_str = "✅ SIGNIFICATIVO" if res["significant"] else "⭕ não significativo"
@@ -1296,15 +1292,28 @@ def bootstrap_pairwise_heatmap(
 #     group_labels=None,
 #     n_bootstrap=10000,
 #     alpha=0.05,
+#     correction="holm",          # ← NOVO: None | "holm" | "bonferroni" | "fdr_bh"
 #     title="",
 #     subtitle="",
 #     figsize=None,
-#     fmt_pvalue=".5f",
+#     fmt_pvalue=".4f",
 #     annot_fontsize=9,
 #     save_fig=False,
 #     save_dir="./plots",
 #     filename=None,
 # ):
+#     """
+#     Heatmap de testes bootstrap par a par com correção para múltiplas comparações.
+
+#     Parâmetros
+#     ----------
+#     correction : str | None
+#         Método de correção para múltiplas comparações:
+#         - "holm"       → Holm-Bonferroni (stepdown, controla FWER) [padrão]
+#         - "bonferroni" → Bonferroni clássico (mais conservador)
+#         - "fdr_bh"     → Benjamini-Hochberg (controla FDR)
+#         - None         → sem correção (p-valores brutos)
+#     """
 #     import numpy as np
 #     import matplotlib.pyplot as plt
 #     import matplotlib.colors as mcolors
@@ -1312,6 +1321,7 @@ def bootstrap_pairwise_heatmap(
 #     import os
 #     import re
 #     from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+#     from statsmodels.stats.multitest import multipletests  # ← NOVO
 
 #     # ------------------------------------------------------------------ #
 #     #  1. Filtrar dados                                                    #
@@ -1343,7 +1353,7 @@ def bootstrap_pairwise_heatmap(
 #     labels = [group_labels.get(g, str(g)) if group_labels else str(g) for g in groups]
 
 #     # ------------------------------------------------------------------ #
-#     #  3. Teste bootstrap par a par                                        #
+#     #  3. Teste bootstrap par a par (p-valores brutos)                    #
 #     # ------------------------------------------------------------------ #
 #     def _bootstrap_test(arr1, arr2):
 #         arr1 = np.array(arr1, dtype=float)
@@ -1353,7 +1363,7 @@ def bootstrap_pairwise_heatmap(
 
 #         if len(arr1) == 0 or len(arr2) == 0:
 #             return dict(
-#                 p_value=np.nan, significant=False,
+#                 p_value=np.nan, p_value_corrected=np.nan, significant=False,
 #                 real_difference=np.nan, n1=len(arr1), n2=len(arr2)
 #             )
 
@@ -1371,26 +1381,59 @@ def bootstrap_pairwise_heatmap(
 
 #         return dict(
 #             p_value=p_val,
+#             p_value_corrected=p_val,   # será sobrescrito após a correção
 #             significant=bool(p_val < alpha),
 #             real_difference=real_diff,
 #             n1=n1,
 #             n2=n2,
 #         )
 
-#     p_matrix = np.full((n, n), np.nan)
 #     results  = {}
+#     pair_keys = list(itertools.combinations(range(n), 2))
 
-#     for i, j in itertools.combinations(range(n), 2):
+#     for i, j in pair_keys:
 #         gi, gj = groups[i], groups[j]
 #         arr_i  = df[df[group_col] == gi][y_col].values
 #         arr_j  = df[df[group_col] == gj][y_col].values
-#         res    = _bootstrap_test(arr_i, arr_j)
-#         p_matrix[i, j] = res["p_value"]
-#         p_matrix[j, i] = res["p_value"]
-#         results[(gi, gj)] = res
+#         results[(gi, gj)] = _bootstrap_test(arr_i, arr_j)
 
 #     # ------------------------------------------------------------------ #
-#     #  4. Colormaps                                                        #
+#     #  4. Correção de Holm-Bonferroni (ou outra escolhida)                #
+#     # ------------------------------------------------------------------ #
+#     valid_corrections = ("holm", "bonferroni", "fdr_bh")
+
+#     if correction is not None:
+#         if correction not in valid_corrections:
+#             raise ValueError(
+#                 f"'correction' deve ser None ou um de {valid_corrections}. "
+#                 f"Recebido: '{correction}'"
+#             )
+
+#         # Pares com p-valor válido (não-NaN)
+#         valid_pairs  = [(gi, gj) for (gi, gj), res in results.items()
+#                         if not np.isnan(res["p_value"])]
+#         p_vals_raw   = [results[(gi, gj)]["p_value"] for (gi, gj) in valid_pairs]
+
+#         if p_vals_raw:
+#             reject, p_corrected, _, _ = multipletests(
+#                 p_vals_raw, alpha=alpha, method=correction
+#             )
+#             for idx, (gi, gj) in enumerate(valid_pairs):
+#                 results[(gi, gj)]["p_value_corrected"] = p_corrected[idx]
+#                 results[(gi, gj)]["significant"]        = bool(reject[idx])
+
+#     # ------------------------------------------------------------------ #
+#     #  5. Montar p_matrix com p-valores corrigidos                        #
+#     # ------------------------------------------------------------------ #
+#     p_matrix = np.full((n, n), np.nan)
+#     for i, j in pair_keys:
+#         gi, gj = groups[i], groups[j]
+#         p = results[(gi, gj)]["p_value_corrected"]
+#         p_matrix[i, j] = p
+#         p_matrix[j, i] = p
+
+#     # ------------------------------------------------------------------ #
+#     #  6. Colormaps                                                        #
 #     #     p in [0, alpha]  → vermelho escuro → claro  (significativo)     #
 #     #     p in [alpha, 1]  → verde claro → escuro     (não significativo) #
 #     # ------------------------------------------------------------------ #
@@ -1405,7 +1448,7 @@ def bootstrap_pairwise_heatmap(
 #     cmap_green = mcolors.LinearSegmentedColormap.from_list(
 #         "green_gradient",
 #         [
-#             (0.0, np.array([0.800, 0.933, 0.800, 1.0])),   # #cceecc  ← limiar
+#             (0.0, np.array([0.800, 0.933, 0.800, 1.0])),   # #cceecc
 #             (0.6, np.array([0.133, 0.545, 0.133, 1.0])),   # #228b22
 #             (1.0, np.array([0.000, 0.271, 0.000, 1.0])),   # #004500
 #         ]
@@ -1415,17 +1458,17 @@ def bootstrap_pairwise_heatmap(
 #     norm_green = mcolors.Normalize(vmin=alpha, vmax=1.0)
 
 #     # ------------------------------------------------------------------ #
-#     #  5. Formatar p-valor para exibição                                  #
+#     #  7. Formatar p-valor para exibição                                  #
 #     # ------------------------------------------------------------------ #
 #     def fmt_p(p):
 #         if np.isnan(p):
 #             return "N/A"
-#         if p < 0.0001:
+#         if p <= 0.0001:
 #             return "< 0.0001"
 #         return f"{p:{fmt_pvalue}}"
 
 #     # ------------------------------------------------------------------ #
-#     #  6. Construir heatmap                                                #
+#     #  8. Construir heatmap                                                #
 #     # ------------------------------------------------------------------ #
 #     if figsize is None:
 #         side = max(5, n * 1.6)
@@ -1449,7 +1492,7 @@ def bootstrap_pairwise_heatmap(
 #                         fontsize=annot_fontsize, color="#888888")
 
 #             elif j < i:
-#                 # Triângulo inferior
+#                 # Triângulo inferior — usa p-valor corrigido
 #                 p = p_matrix[i, j]
 
 #                 if np.isnan(p):
@@ -1485,7 +1528,7 @@ def bootstrap_pairwise_heatmap(
 #                 ax.add_patch(rect)
 
 #     # ------------------------------------------------------------------ #
-#     #  7. Eixos                                                            #
+#     #  9. Eixos                                                            #
 #     # ------------------------------------------------------------------ #
 #     ax.set_xlim(0, n)
 #     ax.set_ylim(0, n)
@@ -1499,9 +1542,8 @@ def bootstrap_pairwise_heatmap(
 #         spine.set_visible(False)
 
 #     # ------------------------------------------------------------------ #
-#     #  8. Duas colorbars laterais (vermelha em cima, verde embaixo)       #
+#     #  10. Duas colorbars laterais                                         #
 #     # ------------------------------------------------------------------ #
-#     # Colorbar vermelha — p in [0, alpha]
 #     ax_cb_red = inset_axes(
 #         ax, width="4%", height="45%",
 #         loc="upper right",
@@ -1513,7 +1555,7 @@ def bootstrap_pairwise_heatmap(
 #     sm_red.set_array([])
 #     cbar_red = fig.colorbar(sm_red, cax=ax_cb_red)
 #     cbar_red.set_label("p < α  (sig.)", fontsize=9, labelpad=6)
-#     cbar_red.ax.invert_yaxis()  # topo = 0, base = alpha
+#     cbar_red.ax.invert_yaxis()
 
 #     tick_red = [0, alpha * 0.25, alpha * 0.5, alpha * 0.75, alpha]
 #     cbar_red.set_ticks(tick_red)
@@ -1522,7 +1564,6 @@ def bootstrap_pairwise_heatmap(
 #         fontsize=8
 #     )
 
-#     # Colorbar verde — p in [alpha, 1]
 #     ax_cb_grn = inset_axes(
 #         ax, width="4%", height="45%",
 #         loc="lower right",
@@ -1546,19 +1587,31 @@ def bootstrap_pairwise_heatmap(
 #     cbar_grn.set_ticklabels([f"{v:.2f}" for v in tick_grn], fontsize=8)
 
 #     # ------------------------------------------------------------------ #
-#     #  9. Título e subtítulo                                               #
+#     #  11. Título, subtítulo e nota de correção                           #
 #     # ------------------------------------------------------------------ #
-#     pad = 30 if subtitle else 20
-#     ax.set_title(title, fontsize=15, fontweight="bold", pad=pad)
+#     correction_label = {
+#         "holm":        "Holm-Bonferroni",
+#         "bonferroni":  "Bonferroni",
+#         "fdr_bh":      "Benjamini-Hochberg (FDR)",
+#         None:          "nenhuma",
+#     }.get(correction, str(correction))
 
+#     full_subtitle = subtitle
+#     correction_note = f"Correção: {correction_label}  |  α = {alpha}"
 #     if subtitle:
-#         ax.text(0.5, 1.02, subtitle, transform=ax.transAxes,
-#                 fontsize=11, ha="center", style="italic", color="dimgray")
+#         full_subtitle = f"{subtitle}\n{correction_note}"
+#     else:
+#         full_subtitle = correction_note
+
+#     pad = 40
+#     ax.set_title(title, fontsize=15, fontweight="bold", pad=pad)
+#     ax.text(0.5, 1.03, full_subtitle, transform=ax.transAxes,
+#             fontsize=10, ha="center", style="italic", color="dimgray")
 
 #     plt.tight_layout()
 
 #     # ------------------------------------------------------------------ #
-#     #  10. Salvar                                                          #
+#     #  12. Salvar                                                          #
 #     # ------------------------------------------------------------------ #
 #     if save_fig:
 #         os.makedirs(save_dir, exist_ok=True)
@@ -1575,20 +1628,31 @@ def bootstrap_pairwise_heatmap(
 #     plt.show()
 
 #     # ------------------------------------------------------------------ #
-#     #  11. Relatório no terminal                                           #
+#     #  13. Relatório no terminal                                           #
 #     # ------------------------------------------------------------------ #
-#     print("=" * 70)
+#     k = len(pair_keys)
+#     print("=" * 80)
 #     print(f"BOOTSTRAP PAR A PAR  —  variável: {y_col}  |  α = {alpha}")
-#     print(f"Iterações: {n_bootstrap:,}")
-#     print("=" * 70)
+#     print(f"Iterações: {n_bootstrap:,}  |  Comparações: {k}  |  Correção: {correction_label}")
+#     print("=" * 80)
+#     print(f"  {'Grupo A':<20}  {'Grupo B':<20}  {'p (bruto)':>12}  {'p (corrig.)':>12}  Resultado")
+#     print("-" * 80)
 #     for (gi, gj), res in results.items():
 #         li    = group_labels.get(gi, gi) if group_labels else gi
 #         lj    = group_labels.get(gj, gj) if group_labels else gj
-#         p     = res["p_value"]
-#         p_str = "< 0.0001" if (not np.isnan(p) and p < 0.0001) else f"{p:.6f}"
+#         p_raw = res["p_value"]
+#         p_cor = res["p_value_corrected"]
+
+#         def _fmt(p):
+#             if np.isnan(p):
+#                 return "       N/A"
+#             if p <= 0.0001:
+#                 return "  < 0.0001"
+#             return f"{p:>12.6f}"
+
 #         sig_str = "✅ SIGNIFICATIVO" if res["significant"] else "⭕ não significativo"
-#         print(f"  {li:20s} vs {lj:20s}  |  p = {p_str:10s}  |  {sig_str}")
-#     print("=" * 70)
+#         print(f"  {li:<20}  {lj:<20}  {_fmt(p_raw)}  {_fmt(p_cor)}  {sig_str}")
+#     print("=" * 80)
 
 #     return results
 
@@ -1605,7 +1669,7 @@ def bootstrap_pairwise_heatmap_grid(
     alpha=0.05,
     title="",
     subtitle="",
-    fmt_pvalue=".5f",
+    fmt_pvalue=".4f",
     annot_fontsize=11,
     label_fontsize=11,
     title_fontsize=16,
